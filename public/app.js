@@ -22,6 +22,27 @@ const FALLBACK_BUYS = [
 const $  = (id) => document.getElementById(id);
 const $$ = (sel, scope = document) => [...scope.querySelectorAll(sel)];
 
+// ---- theme ----
+const THEME_KEY = "asym-theme";
+function applyTheme(t) {
+  document.documentElement.setAttribute("data-theme", t);
+  try { localStorage.setItem(THEME_KEY, t); } catch {}
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute("content", t === "dark" ? "#05070F" : "#F5EEE3");
+}
+function initTheme() {
+  const urlTheme = new URLSearchParams(location.search).get("theme");
+  if (urlTheme === "light" || urlTheme === "dark") { applyTheme(urlTheme); return; }
+  let stored = null;
+  try { stored = localStorage.getItem(THEME_KEY); } catch {}
+  const prefersDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+  applyTheme(stored || (prefersDark ? "dark" : "light"));
+}
+initTheme();
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
 const fmt    = (n, d = 2) => n == null || isNaN(n) ? "—" : n.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: d });
 const fmtUsd = (n, d = 0) => n == null || isNaN(n) ? "—" : "$" + n.toLocaleString(undefined, { maximumFractionDigits: d, minimumFractionDigits: 0 });
 const short = (n) => {
@@ -131,9 +152,9 @@ function drawChart(canvas, series) {
   const Y = (y) => h - pad.b - (h - pad.t - pad.b) * ((y - yMin) / Math.max(1, yMax - yMin));
 
   // y grid + labels
-  ctx.strokeStyle = "rgba(14,20,36,0.06)";
+  ctx.strokeStyle = cssVar("--chart-grid") || "rgba(14,20,36,0.06)";
   ctx.lineWidth = 1;
-  ctx.fillStyle = "#6A7289";
+  ctx.fillStyle = cssVar("--chart-label") || "#6A7289";
   ctx.font = "11px 'JetBrains Mono', monospace";
   ctx.textBaseline = "middle";
   for (let i = 0; i <= 4; i++) {
@@ -149,8 +170,8 @@ function drawChart(canvas, series) {
 
   // area
   const grad = ctx.createLinearGradient(0, pad.t, 0, h - pad.b);
-  grad.addColorStop(0, "rgba(45,91,255,0.28)");
-  grad.addColorStop(0.6, "rgba(255,196,161,0.18)");
+  grad.addColorStop(0, cssVar("--chart-area-a") || "rgba(45,91,255,0.28)");
+  grad.addColorStop(0.6, cssVar("--chart-area-b") || "rgba(255,196,161,0.18)");
   grad.addColorStop(1, "rgba(45,91,255,0)");
   ctx.fillStyle = grad;
   ctx.beginPath();
@@ -162,9 +183,9 @@ function drawChart(canvas, series) {
 
   // line
   const lineGrad = ctx.createLinearGradient(pad.l, 0, w - pad.r, 0);
-  lineGrad.addColorStop(0, "#1E44D0");
-  lineGrad.addColorStop(0.6, "#2D5BFF");
-  lineGrad.addColorStop(1, "#FFB894");
+  lineGrad.addColorStop(0, cssVar("--chart-line-a") || "#1E44D0");
+  lineGrad.addColorStop(0.6, cssVar("--chart-line-b") || "#2D5BFF");
+  lineGrad.addColorStop(1, cssVar("--chart-line-c") || "#E67B3E");
   ctx.strokeStyle = lineGrad;
   ctx.lineWidth = 2.6;
   ctx.lineJoin = "round";
@@ -176,15 +197,18 @@ function drawChart(canvas, series) {
   ctx.stroke();
 
   // points
+  const halo = cssVar("--chart-point-halo") || "rgba(45,91,255,0.15)";
+  const pointFill = cssVar("--chart-point-fill") || "#2D5BFF";
+  const pointCenter = cssVar("--paper") || "#fff";
   for (let i = 0; i < series.length; i++) {
     const x = X(xs[i]), y = Y(ys[i]);
     ctx.beginPath();
     ctx.arc(x, y, 7, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(45,91,255,0.15)";
+    ctx.fillStyle = halo;
     ctx.fill();
     ctx.beginPath();
     ctx.arc(x, y, 3.4, 0, Math.PI * 2);
-    ctx.fillStyle = "#2D5BFF";
+    ctx.fillStyle = pointFill;
     ctx.fill();
   }
 
@@ -192,14 +216,14 @@ function drawChart(canvas, series) {
   const lx = X(xs[xs.length - 1]), ly = Y(ys[ys.length - 1]);
   ctx.beginPath();
   ctx.arc(lx, ly, 5.5, 0, Math.PI * 2);
-  ctx.fillStyle = "#fff";
+  ctx.fillStyle = pointCenter;
   ctx.fill();
-  ctx.strokeStyle = "#2D5BFF";
+  ctx.strokeStyle = pointFill;
   ctx.lineWidth = 2;
   ctx.stroke();
 
   // x labels
-  ctx.fillStyle = "#6A7289";
+  ctx.fillStyle = cssVar("--chart-label") || "#6A7289";
   ctx.textBaseline = "alphabetic";
   const fmtDate = (d) => {
     const [y, m] = d.split("-");
@@ -213,7 +237,7 @@ function drawChart(canvas, series) {
   }
 }
 function drawEmpty(ctx, w, h) {
-  ctx.fillStyle = "#6A7289";
+  ctx.fillStyle = cssVar("--chart-label") || "#6A7289";
   ctx.font = "13px 'Inter', sans-serif";
   ctx.textAlign = "center";
   ctx.fillText("No data in this range", w / 2, h / 2);
@@ -377,9 +401,22 @@ function wireRangeTabs() {
   }
 }
 
+// ---- theme toggle ----
+function wireThemeToggle() {
+  const btn = $("themeToggle");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const now = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    applyTheme(now);
+    // redraw chart in new colors
+    drawChart($("polChart"), filterSeries(currentLocks, currentRange));
+  });
+}
+
 // ---- main ----
 async function main() {
   wireRangeTabs();
+  wireThemeToggle();
 
   // Kick off on-chain reads and the aggregator in parallel.
   const [vlcvxRaw, cvxRaw, price, treasury] = await Promise.all([
