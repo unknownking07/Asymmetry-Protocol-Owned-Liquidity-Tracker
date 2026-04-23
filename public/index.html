@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ASYM War Chest · Unofficial POL Tracker</title>
+<meta name="description" content="Unofficial community tracker for Asymmetry Finance Protocol Owned Liquidity. Live vlCVX war chest, treasury holdings, Convex votes, and on-chain activity." />
+
+<meta property="og:title" content="ASYM War Chest · Unofficial POL Tracker" />
+<meta property="og:description" content="Live tracker for the Asymmetry Finance treasury: vlCVX, CVX, votes, allocations, flows." />
+<meta property="og:type" content="website" />
+<meta property="og:url" content="https://asym-pol-tracker.pages.dev/" />
+<meta property="og:image" content="https://asym-pol-tracker.pages.dev/og.jpg" />
+<meta property="og:image:width" content="1200" />
+<meta property="og:image:height" content="630" />
+<meta property="og:image:alt" content="Protocol Owned Liquidity — Asymmetry Treasury" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="ASYM War Chest · Unofficial POL Tracker" />
+<meta name="twitter:description" content="Live tracker for the Asymmetry Finance treasury: vlCVX, CVX, votes, allocations, flows." />
+<meta name="twitter:image" content="https://asym-pol-tracker.pages.dev/og.jpg" />
+<meta name="twitter:creator" content="@abhiontwt" />
+<meta name="theme-color" content="#F5EEE3" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="/style.css" />
+<link rel="icon" href="/pol.jpg" />
+</head>
+<body>
+
+<div class="bg-grid" aria-hidden="true"></div>
+
+<!-- navy announcement bar — mirrors Asymmetry.finance -->
+<div class="announce">
+  <span id="announceVlcvx" class="live">Loading vlCVX…</span>
+  <span class="sep">|</span>
+  <span>Treasury Value: <span class="val" id="announceTvl">—</span></span>
+  <span class="sep">|</span>
+  <span>Unofficial Community Tracker</span>
+</div>
+
+<!-- floating pill-shaped header -->
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">
+      <span class="logo" aria-hidden="true">
+        <img src="/pol.jpg" alt="" width="34" height="34" />
+      </span>
+      <div class="brand-text">
+        <span class="brand-title">ASYM <span class="brand-dot">·</span> War&nbsp;Chest</span>
+        <span class="brand-sub">Unofficial community tracker</span>
+      </div>
+    </a>
+
+    <nav class="nav">
+      <a id="walletLink" class="addrChip" href="https://debank.com/profile/0xce352181c0f0350f1687e1a44c45bc9d96ee738b" target="_blank" rel="noopener">
+        <span class="addrDot"></span><span class="mono">0xce35…738b</span>
+      </a>
+      <span class="liveChip" title="Auto-refresh">
+        <span class="pulse"></span><span id="updated">syncing…</span>
+      </span>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="hero-head">
+      <span class="pill">Protocol Owned Liquidity · Live on Mainnet</span>
+      <h1>A live lens on<br/>Asymmetry's <span class="grad">War&nbsp;Chest</span></h1>
+      <p class="lede">Tracking every vlCVX purchase, Convex vote, bribe claim, and revenue stream flowing through the Asymmetry treasury — so the community can see, at a glance, what "owning not renting" actually looks like.</p>
+    </div>
+
+    <div class="hero-stats">
+      <div class="stat stat-xl">
+        <div class="stat-top">
+          <span class="stat-label">vlCVX War Chest</span>
+          <span class="stat-badge">Primary POL</span>
+        </div>
+        <div class="stat-value" id="vlcvx" data-count="0">—</div>
+        <div class="stat-sub">
+          <span id="vlcvxUsd" class="stat-sub-main">—</span>
+          <span class="stat-sub-hint">≈ value at current CVX price</span>
+        </div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-top"><span class="stat-label">Last Purchase</span></div>
+        <div class="stat-value" id="lastBuyAgo">—</div>
+        <div class="stat-sub"><span id="lastBuyAmt" class="stat-sub-main">—</span><span class="stat-sub-hint" id="lastBuyDate"></span></div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-top"><span class="stat-label">Treasury Value</span></div>
+        <div class="stat-value" id="tvl">—</div>
+        <div class="stat-sub"><span class="stat-sub-hint">CVX + vlCVX, this wallet</span></div>
+      </div>
+
+      <div class="stat">
+        <div class="stat-top"><span class="stat-label">CVX Price</span></div>
+        <div class="stat-value" id="cvxPrice">—</div>
+        <div class="stat-sub"><span id="cvxChange" class="mono">—</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CHART + BUYS -->
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>War Chest Growth</h2>
+        <p class="muted small">Cumulative vlCVX accrual from announced purchases</p>
+      </div>
+      <div class="segmented" role="tablist">
+        <button class="seg on" data-range="all" role="tab">ALL</button>
+        <button class="seg" data-range="6m" role="tab">6M</button>
+        <button class="seg" data-range="3m" role="tab">3M</button>
+      </div>
+    </div>
+    <div class="chartwrap">
+      <canvas id="polChart"></canvas>
+    </div>
+
+    <div class="buy-head">
+      <h3>POL Purchases</h3>
+      <span class="muted small">Source: Medium + official channels</span>
+    </div>
+    <ul class="buylist" id="buylist"></ul>
+  </section>
+
+  <!-- VOTES + ALLOCATIONS -->
+  <section class="grid two gap">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Convex Votes</h2>
+          <p class="muted small">Latest gauge votes cast by the treasury on Snapshot (<span class="mono">cvx.eth</span>)</p>
+        </div>
+      </div>
+      <ul class="list" id="votes"><li class="muted">Loading…</li></ul>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Allocations — Bribes Paid</h2>
+          <p class="muted small">Tokens deposited to Votium Platform to direct votes toward Asymmetry pools</p>
+        </div>
+      </div>
+      <ul class="list" id="allocations"><li class="muted">Loading…</li></ul>
+    </div>
+  </section>
+
+  <!-- REV STREAMS + TXS -->
+  <section class="grid two gap">
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Revenue Streams</h2>
+          <p class="muted small">Token inflows into the treasury, categorized by source</p>
+        </div>
+      </div>
+      <ul class="list" id="revenue"><li class="muted">Loading…</li></ul>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head">
+        <div>
+          <h2>Recent Activity</h2>
+          <p class="muted small">Token transfers in / out of the treasury wallet</p>
+        </div>
+      </div>
+      <ul class="list" id="txs"><li class="muted">Loading…</li></ul>
+    </div>
+  </section>
+
+  <!-- NOTES -->
+  <section class="panel notes">
+    <h2>How this works</h2>
+    <div class="grid two gap">
+      <div>
+        <p class="muted small"><strong>Data sources</strong></p>
+        <ul class="small">
+          <li>Public Ethereum RPC (Cloudflare) — live vlCVX &amp; CVX balances</li>
+          <li>CoinGecko — CVX price &amp; 24h change</li>
+          <li>Etherscan V2 — on-chain transfers, locks, votes</li>
+          <li>Snapshot (<span class="mono">cvx.eth</span>) — gauge voting history</li>
+        </ul>
+      </div>
+      <div>
+        <p class="muted small"><strong>Disclaimer</strong></p>
+        <ul class="small">
+          <li>Unofficial. Not affiliated with Asymmetry Finance.</li>
+          <li>Source of truth is the wallet itself on <a href="https://etherscan.io/address/0xce352181c0f0350f1687e1a44c45bc9d96ee738b" target="_blank" rel="noopener">Etherscan</a> / <a href="https://debank.com/profile/0xce352181c0f0350f1687e1a44c45bc9d96ee738b" target="_blank" rel="noopener">DeBank</a>.</li>
+          <li>Not financial advice.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap row between center gap">
+    <span class="muted small">Built for the ASYM community · by <a href="https://x.com/abhiontwt" target="_blank" rel="noopener">@abhiontwt</a></span>
+    <span class="muted small">
+      <a href="https://medium.com/@asymmetryfin" target="_blank" rel="noopener">Medium</a> ·
+      <a href="https://etherscan.io/address/0xce352181c0f0350f1687e1a44c45bc9d96ee738b" target="_blank" rel="noopener">Etherscan</a> ·
+      <a href="https://debank.com/profile/0xce352181c0f0350f1687e1a44c45bc9d96ee738b" target="_blank" rel="noopener">DeBank</a>
+    </span>
+  </div>
+</footer>
+
+<script src="/app.js" type="module"></script>
+</body>
+</html>

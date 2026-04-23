@@ -1,0 +1,12 @@
+{
+  "name": "asym-pol-tracker",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "wrangler pages dev",
+    "deploy": "wrangler pages deploy --project-name=asym-pol-tracker --branch=main --commit-dirty=true"
+  },
+  "devDependencies": {
+    "wrangler": "^3.90.0"
+  }
+}
