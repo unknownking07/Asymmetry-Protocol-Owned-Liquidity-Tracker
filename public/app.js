@@ -505,10 +505,10 @@ async function loadVotes() {
     const r = await fetch(`/api/votes?address=${TREASURY}`);
     if (!r.ok) throw new Error();
     const j = await r.json();
-    const items = (j.votes || []).slice(0, 10);
+    const items = (j.votes || []).slice(0, 12);
     ul.innerHTML = "";
     if (items.length === 0) {
-      ul.innerHTML = `<li class="muted">No direct Snapshot votes found for this wallet yet. Convex voting flows via Votium (see Allocations).</li>`;
+      ul.innerHTML = `<li class="muted">No Snapshot votes found yet.</li>`;
       return;
     }
     for (const v of items) {
@@ -527,12 +527,19 @@ async function loadVotes() {
         : `<span class="muted small">Choice data unavailable for this proposal.</span>`;
       const moreTxt = rest > 0 ? `<span class="muted small"> · +${rest} more</span>` : "";
       const titleShort = (v.title || "").replace(/^\[[^\]]+\]\s*/, "").slice(0, 70);
+      const sourceBadge = v.source === "delegated"
+        ? `<span class="vote-source delegated" title="Cast by delegate ${v.delegate}">via delegate</span>`
+        : `<span class="vote-source direct">direct</span>`;
+      const vpLine = v.vp != null
+        ? `<span class="muted small"> · ${shortTok(v.vp)} vp</span>`
+        : "";
       li.innerHTML = `
         <div class="vote-head">
           <span class="dir in">${v.space.split(".")[0]}</span>
+          ${sourceBadge}
           <span class="vote-title">${escapeHtml(titleShort)}</span>
           <span class="spacer"></span>
-          <span class="tstamp">${v.date}${moreTxt}</span>
+          <span class="tstamp">${v.date}${vpLine}${moreTxt}</span>
           ${v.proposalId ? `<a href="https://snapshot.org/#/${v.space}/proposal/${v.proposalId}" target="_blank" rel="noopener">↗</a>` : ""}
         </div>
         ${gaugesHtml}`;

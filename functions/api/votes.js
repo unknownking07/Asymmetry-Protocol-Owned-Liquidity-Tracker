@@ -1,12 +1,10 @@
-// Cloudflare Pages Function: fetch Snapshot votes cast by the treasury across
-// every space we track, and resolve each vote's `choice` into actual gauge
-// names + weights so the UI can show where the voting power is pointed.
-//
-// The Asymmetry treasury votes directly on sdpendle.eth (and will pick up more
-// spaces as positions grow) — Convex votes mostly flow through Votium, so
-// cvx.eth is usually empty for this wallet.
+// Cloudflare Pages Function: fetch Snapshot votes that represent the
+// treasury's voting power — both direct votes AND votes cast by delegates
+// (e.g. vlCVX is delegated to a Safe that casts the weekly cvx.eth vote).
+// Each vote's `choice` is resolved into gauge-name allocations so the UI
+// can show where the voting power is pointed.
 
-import { VOTE_SPACES } from "../_lib/labels.js";
+import { VOTE_SPACES, VOTE_DELEGATES } from "../_lib/labels.js";
 
 export async function onRequestGet({ request }) {
   const url = new URL(request.url);
@@ -15,11 +13,47 @@ export async function onRequestGet({ request }) {
     return json({ error: "bad address" }, 400);
   }
 
-  const cacheKey = new Request(`https://cache.snapshot/v2/${address}`, { method: "GET" });
+  const cacheKey = new Request(`https://cache.snapshot/v3/${address}`, { method: "GET" });
   const cache = caches.default;
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
 
+  // Direct votes by the treasury, plus the votes cast by each configured
+  // delegate in the space they're delegated for. Fetched in parallel.
+  const delegatePairs = Object.entries(VOTE_DELEGATES)
+    .map(([space, addr]) => ({ space, addr: addr.toLowerCase() }));
+
+  const [directRaw, ...delegateRaws] = await Promise.all([
+    fetchVotesFor(address, VOTE_SPACES),
+    ...delegatePairs.map(p => fetchVotesFor(p.addr, [p.space])),
+  ]);
+
+  const direct = (directRaw || []).map(v => shapeVote(v, { source: "direct" }));
+  const delegated = delegatePairs.flatMap((p, i) => {
+    return (delegateRaws[i] || []).map(v => shapeVote(v, {
+      source: "delegated",
+      delegate: p.addr,
+    }));
+  });
+
+  // Combine, drop dupes (unlikely but cheap), sort newest first.
+  const seen = new Set();
+  const votes = [...direct, ...delegated]
+    .filter(v => {
+      const k = v.proposalId + "|" + v.source;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .sort((a, b) => b.ts - a.ts);
+
+  const resp = json({ votes }, 200, 300);
+  await cache.put(cacheKey, resp.clone());
+  return resp;
+}
+
+async function fetchVotesFor(voter, spaces) {
+  if (!voter || !spaces.length) return [];
   const query = `
     query Votes($voter: String!, $spaces: [String]!) {
       votes(
@@ -36,38 +70,32 @@ export async function onRequestGet({ request }) {
         proposal { id title type choices }
       }
     }`;
-
-  let votes = [];
   try {
     const r = await fetch("https://hub.snapshot.org/graphql", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ query, variables: { voter: address, spaces: VOTE_SPACES } }),
+      body: JSON.stringify({ query, variables: { voter, spaces } }),
     });
     const j = await r.json();
-    votes = (j.data?.votes || []).map(shapeVote);
+    return j.data?.votes || [];
   } catch (e) {
-    return json({ votes: [], error: String(e) }, 200);
+    console.warn("snapshot fetch failed", voter, spaces, e);
+    return [];
   }
-
-  const resp = json({ votes }, 200, 300);
-  await cache.put(cacheKey, resp.clone());
-  return resp;
 }
 
-// Normalize a Snapshot vote into { date, space, round, title, allocations[], vp, proposalId }.
-// `allocations` is the choice object resolved against proposal.choices and
-// sorted by weight descending — so the caller can render the top N gauges.
-function shapeVote(v) {
+// Normalize a Snapshot vote into the shape the UI expects.
+function shapeVote(v, extra = {}) {
   const choices = v.proposal?.choices || [];
   const title = v.proposal?.title || "";
   const allocations = resolveAllocations(v.choice, choices);
   const roundMatch =
     title.match(/Round\s+(\d+)/i) ||
     title.match(/Vote\s+ID:\s*(\d+)/i) ||
-    title.match(/(\d{1,2}\/\d{1,2}\/\d{4})/); // Pendle date-range proposals
+    title.match(/(\d{1,2}\/\d{1,2}\/\d{4})/);
 
   return {
+    ts: v.created,
     date: new Date(v.created * 1000).toISOString().slice(0, 10),
     space: v.space?.id || "?",
     round: roundMatch?.[1] || "",
@@ -77,6 +105,7 @@ function shapeVote(v) {
     gaugeCount: allocations.length,
     vp: v.vp ?? null,
     proposalId: v.proposal?.id,
+    ...extra,
   };
 }
 
@@ -84,7 +113,6 @@ function shapeVote(v) {
 //   single-choice / basic:  choice = 1                 (1-indexed)
 //   approval:               choice = [1, 3, 5]
 //   weighted / quadratic:   choice = { "1": 50, "3": 25 }
-// All choice indices are 1-based into the proposal.choices array.
 function resolveAllocations(choice, choices) {
   if (choice == null || choices.length === 0) return [];
 

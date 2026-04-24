@@ -77,9 +77,8 @@ export const VOTING_TOKENS = [
   },
 ];
 
-// Snapshot spaces to query for direct treasury votes. Keep this short —
-// Roman's shortlist was CVX, Pendle, LQTY. Convex voting mostly flows
-// through Votium so cvx.eth is usually empty for this wallet.
+// Snapshot spaces to query for treasury votes (direct + delegated).
+// Roman's shortlist was CVX, Pendle, LQTY.
 export const VOTE_SPACES = [
   "cvx.eth",
   "sdpendle.eth",
@@ -88,6 +87,16 @@ export const VOTE_SPACES = [
   "sdfxs.eth",
   "liquity.eth",
 ];
+
+// Per-space Snapshot vote delegates. The treasury has delegated its cvx.eth
+// voting to a signer on a Gnosis Safe — that signer's votes represent our
+// vlCVX voting power at the snapshot block. Verified via the Snapshot
+// delegation registry (0x469788fE6E9E9681C6ebF3bF78e7Fd26Fc015446): for
+// cvx.eth the treasury → 0x4066745373081b224fb36b1ff82fa991a636610e.
+// Append entries as new delegations are set up.
+export const VOTE_DELEGATES = {
+  "cvx.eth": "0x4066745373081b224fb36b1ff82fa991a636610e",
+};
 
 export const LABELS = {
   [TREASURY]: { name: "Asymmetry Treasury", kind: "treasury" },
