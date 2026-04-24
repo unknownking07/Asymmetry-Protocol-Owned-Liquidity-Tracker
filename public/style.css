@@ -542,7 +542,43 @@ a:hover{ color: var(--blue-dark) }
   cursor: help;
 }
 .vote-source.direct{ background: rgba(14,158,86,0.12); color: var(--good) }
-.vote-source.delegated{ background: rgba(45,91,255,0.14); color: var(--blue) }
+.vote-source.delegated{
+  background: rgba(45,91,255,0.14); color: var(--blue);
+  text-decoration: none;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; font-weight: 600;
+}
+.vote-source.delegated:hover{ background: rgba(45,91,255,0.22); text-decoration: underline }
+
+/* ------------ vote filter tabs ------------ */
+.vote-tabs{
+  display:flex; flex-wrap:wrap; gap:6px;
+  margin: 10px 0 4px;
+}
+.vtab{
+  background: var(--cream-3);
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font: 600 12px 'Inter', sans-serif;
+  padding: 6px 12px;
+  border-radius: var(--radius-pill);
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 8px;
+  transition: all .18s ease;
+}
+.vtab:hover{ color: var(--ink); border-color: var(--border-strong) }
+.vtab.on{
+  background: var(--blue); color: #fff; border-color: var(--blue);
+}
+.vtab.on .vtab-ct{ background: rgba(255,255,255,0.25); color: #fff }
+.vtab-ct{
+  background: rgba(140,148,168,0.18);
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10.5px; padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  font-weight: 700;
+}
 .gauges{ list-style:none; padding:0; margin:2px 0 0; display:flex; flex-direction:column; gap:4px }
 .gauges li{
   display:grid; grid-template-columns: 1fr auto;

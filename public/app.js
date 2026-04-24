@@ -499,54 +499,109 @@ function setKeyMissingState() {
   drawChart($("polChart"), filterSeries(FALLBACK_BUYS, currentRange));
 }
 
+// Friendly labels per Snapshot space for the tab bar — keeps tabs short and
+// recognizable (Roman: "tab for the different protocols").
+const SPACE_LABELS = {
+  "cvx.eth":      "Convex",
+  "sdpendle.eth": "Pendle",
+  "sdcrv.eth":    "Curve",
+  "sdbal.eth":    "Balancer",
+  "sdfxs.eth":    "Frax",
+  "liquity.eth":  "Liquity",
+};
+let allVotes = [];
+let activeSpace = "all";
+
+const shortAddr = (a) => a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "";
+
 async function loadVotes() {
   const ul = $("votes");
   try {
     const r = await fetch(`/api/votes?address=${TREASURY}`);
     if (!r.ok) throw new Error();
     const j = await r.json();
-    const items = (j.votes || []).slice(0, 12);
-    ul.innerHTML = "";
-    if (items.length === 0) {
+    allVotes = j.votes || [];
+    if (allVotes.length === 0) {
       ul.innerHTML = `<li class="muted">No Snapshot votes found yet.</li>`;
+      $("voteTabs").innerHTML = "";
       return;
     }
-    for (const v of items) {
-      const li = document.createElement("li");
-      li.className = "vote-item";
-      const top = (v.allocations || []).slice(0, 4);
-      const rest = Math.max(0, (v.gaugeCount || 0) - top.length);
-      const gaugesHtml = top.length
-        ? `<ul class="gauges">${top.map(a => `
-            <li>
-              <span class="g-bar" style="--pct:${a.pct.toFixed(2)}%"></span>
-              <span class="g-name">${escapeHtml(a.gauge)}</span>
-              <span class="g-pct mono">${a.pct.toFixed(1)}%</span>
-            </li>`).join("")}
-           </ul>`
-        : `<span class="muted small">Choice data unavailable for this proposal.</span>`;
-      const moreTxt = rest > 0 ? `<span class="muted small"> · +${rest} more</span>` : "";
-      const titleShort = (v.title || "").replace(/^\[[^\]]+\]\s*/, "").slice(0, 70);
-      const sourceBadge = v.source === "delegated"
-        ? `<span class="vote-source delegated" title="Cast by delegate ${v.delegate}">via delegate</span>`
-        : `<span class="vote-source direct">direct</span>`;
-      const vpLine = v.vp != null
-        ? `<span class="muted small"> · ${shortTok(v.vp)} vp</span>`
-        : "";
-      li.innerHTML = `
-        <div class="vote-head">
-          <span class="dir in">${v.space.split(".")[0]}</span>
-          ${sourceBadge}
-          <span class="vote-title">${escapeHtml(titleShort)}</span>
-          <span class="spacer"></span>
-          <span class="tstamp">${v.date}${vpLine}${moreTxt}</span>
-          ${v.proposalId ? `<a href="https://snapshot.org/#/${v.space}/proposal/${v.proposalId}" target="_blank" rel="noopener">↗</a>` : ""}
-        </div>
-        ${gaugesHtml}`;
-      ul.appendChild(li);
-    }
+    renderVoteTabs();
+    renderVotes();
   } catch {
     ul.innerHTML = `<li class="muted">Snapshot indexer unreachable. Votes will appear once it responds.</li>`;
+  }
+}
+
+function renderVoteTabs() {
+  const tabsEl = $("voteTabs");
+  if (!tabsEl) return;
+  const counts = {};
+  for (const v of allVotes) counts[v.space] = (counts[v.space] || 0) + 1;
+  const spaces = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
+  // Skip tabs entirely if everything is one protocol (no filter to make).
+  if (spaces.length < 2) { tabsEl.innerHTML = ""; return; }
+
+  const tabs = [
+    { key: "all", label: "All", count: allVotes.length },
+    ...spaces.map(s => ({ key: s, label: SPACE_LABELS[s] || s.split(".")[0], count: counts[s] })),
+  ];
+  tabsEl.innerHTML = tabs.map(t =>
+    `<button class="vtab ${activeSpace === t.key ? "on" : ""}" data-space="${t.key}">${t.label}<span class="vtab-ct">${t.count}</span></button>`
+  ).join("");
+  for (const btn of tabsEl.querySelectorAll(".vtab")) {
+    btn.addEventListener("click", () => {
+      activeSpace = btn.dataset.space;
+      tabsEl.querySelectorAll(".vtab").forEach(b => b.classList.toggle("on", b.dataset.space === activeSpace));
+      renderVotes();
+    });
+  }
+}
+
+function renderVotes() {
+  const ul = $("votes");
+  const filtered = activeSpace === "all" ? allVotes : allVotes.filter(v => v.space === activeSpace);
+  const items = filtered.slice(0, 12);
+  ul.innerHTML = "";
+  if (items.length === 0) {
+    ul.innerHTML = `<li class="muted">No votes in this protocol yet.</li>`;
+    return;
+  }
+  for (const v of items) {
+    const li = document.createElement("li");
+    li.className = "vote-item";
+    const top = (v.allocations || []).slice(0, 4);
+    const rest = Math.max(0, (v.gaugeCount || 0) - top.length);
+    const gaugesHtml = top.length
+      ? `<ul class="gauges">${top.map(a => `
+          <li>
+            <span class="g-bar" style="--pct:${a.pct.toFixed(2)}%"></span>
+            <span class="g-name">${escapeHtml(a.gauge)}</span>
+            <span class="g-pct mono">${a.pct.toFixed(1)}%</span>
+          </li>`).join("")}
+         </ul>`
+      : `<span class="muted small">Choice data unavailable for this proposal.</span>`;
+    const moreTxt = rest > 0 ? `<span class="muted small"> · +${rest} more</span>` : "";
+    const titleShort = (v.title || "").replace(/^\[[^\]]+\]\s*/, "").slice(0, 70);
+    // Delegated → clickable link to delegate's Etherscan, showing the short
+    // address inline so users don't need a tooltip to know who voted.
+    const sourceBadge = v.source === "delegated"
+      ? `<a class="vote-source delegated" href="https://etherscan.io/address/${v.delegate}" target="_blank" rel="noopener" title="Vote cast by delegate ${v.delegate} — click to view on Etherscan">via ${shortAddr(v.delegate)}</a>`
+      : `<span class="vote-source direct" title="Vote cast directly by the treasury">direct</span>`;
+    const vpLine = v.vp != null
+      ? `<span class="muted small"> · ${shortTok(v.vp)} vp</span>`
+      : "";
+    li.innerHTML = `
+      <div class="vote-head">
+        <span class="dir in">${SPACE_LABELS[v.space] || v.space.split(".")[0]}</span>
+        ${sourceBadge}
+        <span class="vote-title">${escapeHtml(titleShort)}</span>
+        <span class="spacer"></span>
+        <span class="tstamp">${v.date}${vpLine}${moreTxt}</span>
+        ${v.proposalId ? `<a href="https://snapshot.org/#/${v.space}/proposal/${v.proposalId}" target="_blank" rel="noopener">↗</a>` : ""}
+      </div>
+      ${gaugesHtml}`;
+    ul.appendChild(li);
   }
 }
 
