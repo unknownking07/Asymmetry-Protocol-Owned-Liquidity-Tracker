@@ -467,9 +467,92 @@ a:hover{ color: var(--blue-dark) }
 }
 .list li .dir.in{ background: rgba(14,158,86,0.12); color: var(--good); }
 .list li .dir.out{ background: rgba(209,61,77,0.12); color: var(--bad); }
+.list li .dir.rev{ background: rgba(45,91,255,0.14); color: var(--blue); }
 .list li .sym{ font-weight:600; color: var(--ink) }
 .list li .tstamp{ color: var(--muted); font-family:'JetBrains Mono', monospace; font-size:11.5px; }
 .list li .spacer{ flex:1 }
+.list li .tag{
+  font-size: 10px; padding: 2px 7px; border-radius: var(--radius-pill);
+  font-weight: 600; letter-spacing: 0.04em;
+}
+.list li .tag-vote{ background: rgba(45,91,255,0.12); color: var(--blue); }
+
+/* ------------ voting power grid ------------ */
+.vp-grid{
+  list-style:none; padding:0; margin:8px 0 0;
+  display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap:10px;
+}
+.vp-item{
+  padding:14px 14px 12px;
+  background: var(--cream-3);
+  border:1px solid var(--border);
+  border-radius: var(--radius-sm);
+  display:flex; flex-direction:column; gap:6px;
+  transition: all .2s ease;
+}
+.vp-item:hover{ background: var(--paper); border-color: rgba(45,91,255,0.25); transform: translateY(-1px) }
+.vp-head{ display:flex; justify-content:space-between; align-items:baseline; gap:8px }
+.vp-sym{ font-weight:700; color: var(--ink); font-size:14px; letter-spacing:0.01em }
+.vp-eco{ font-size:11px; color: var(--muted); text-transform:uppercase; letter-spacing:0.06em }
+.vp-bal{ display:flex; align-items:baseline; gap:10px }
+.vp-amt{ font-family:'Space Grotesk','Inter',sans-serif; font-weight:600; font-size:20px; color: var(--ink); font-variant-numeric: tabular-nums; }
+.vp-usd{ color: var(--muted); font-size:12px; font-family:'JetBrains Mono', monospace }
+.vp-meta{ min-height: 16px }
+.vp-space{
+  font-size:11px; font-family:'JetBrains Mono', monospace;
+  color: var(--blue); text-decoration:none;
+  padding: 2px 8px; border-radius: var(--radius-pill);
+  background: rgba(45,91,255,0.08);
+}
+.vp-space:hover{ background: rgba(45,91,255,0.16) }
+.vp-meta{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; min-height:18px }
+.vp-status{
+  font-size:10px; font-weight:600; letter-spacing:0.06em;
+  padding: 2px 8px; border-radius: var(--radius-pill);
+  text-transform: uppercase;
+}
+.vp-status.held{ background: rgba(14,158,86,0.12); color: var(--good) }
+.vp-status.watching{ background: rgba(140,148,168,0.12); color: var(--muted) }
+.vp-status.unwound{ background: rgba(255,196,161,0.18); color: var(--grad-4) }
+
+.vp-dormant{ opacity: 0.72; border-style: dashed }
+.vp-dormant .vp-amt{ color: var(--muted) }
+.vp-dormant:hover{ opacity: 0.92 }
+
+.vp-history{
+  font-size: 11.5px;
+  color: var(--muted);
+  font-family: 'JetBrains Mono', monospace;
+  margin-top: -2px;
+}
+
+/* ------------ votes with gauges ------------ */
+.vote-item{
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 8px !important;
+}
+.vote-head{ display:flex; align-items:center; gap:10px; flex-wrap:wrap }
+.vote-title{ font-size:13px; color: var(--ink-dim); font-weight:500 }
+.gauges{ list-style:none; padding:0; margin:2px 0 0; display:flex; flex-direction:column; gap:4px }
+.gauges li{
+  display:grid; grid-template-columns: 1fr auto;
+  align-items:center; gap:10px;
+  position:relative; padding: 6px 10px;
+  background: var(--cream-2);
+  border-radius: 8px;
+  font-size:12px;
+  overflow:hidden;
+}
+.gauges .g-bar{
+  position:absolute; left:0; top:0; bottom:0;
+  width: var(--pct, 0%);
+  background: linear-gradient(90deg, rgba(45,91,255,0.18), rgba(45,91,255,0.08));
+  z-index: 0;
+}
+.gauges .g-name{ position:relative; z-index:1; color: var(--ink-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+.gauges .g-pct{ position:relative; z-index:1; color: var(--ink); font-weight:600; font-size:11.5px }
 
 /* ------------ notes ------------ */
 .notes ul{ margin:8px 0 0 18px; padding:0; color: var(--ink-dim); }

@@ -4,6 +4,43 @@ const TREASURY = "0xce352181c0f0350f1687e1a44c45bc9d96ee738b";
 const CVX_LOCKER_V2 = "0x72a19342e8F1838460eBFCCEf09F6585e32db86E";
 const CVX_TOKEN = "0x4e3FBD56CD56c3e72c1403e103b45Db9da5B9D2B";
 
+// Voting tokens tracked client-side. Mirrors functions/_lib/labels.js —
+// extend here when you add a new entry there.
+const VOTING_TOKENS = [
+  {
+    symbol: "vlCVX",
+    name: "vote-locked CVX",
+    address: "0x72a19342e8F1838460eBFCCEf09F6585e32db86E",
+    ecosystem: "Convex",
+    space: "cvx.eth",
+    coingeckoId: "convex-finance",
+  },
+  {
+    symbol: "sdPENDLE-gauge",
+    name: "staked sdPENDLE",
+    address: "0x50dc9ae51f78c593d4138263da7088a973b8184e",
+    ecosystem: "Stake DAO · Pendle",
+    space: "sdpendle.eth",
+    coingeckoId: "stake-dao-pendle",
+  },
+  {
+    symbol: "sdPENDLE",
+    name: "sdPENDLE (unstaked)",
+    address: "0x5ea630e00d6ee438d3dea1556a110359acdc10a9",
+    ecosystem: "Stake DAO · Pendle",
+    space: null,
+    coingeckoId: "stake-dao-pendle",
+  },
+  {
+    symbol: "LQTY",
+    name: "Liquity governance token",
+    address: "0x6dea81c8171d0ba574754ef6f8b412f2ed88c54d",
+    ecosystem: "Liquity v2",
+    space: "liquity.eth",
+    coingeckoId: "liquity",
+  },
+];
+
 // Fallback chain of public Ethereum RPCs — tried in order.
 const RPCS = [
   "https://ethereum-rpc.publicnode.com",
@@ -87,13 +124,16 @@ async function erc20Balance(token, holder) {
   return BigInt(data);
 }
 
-async function getCvxPrice() {
+// Fetch USD prices for all unique coingecko IDs across the voting-token config,
+// plus CVX (for the headline hero). One batched call.
+async function getPrices() {
+  const ids = [...new Set(["convex-finance", ...VOTING_TOKENS.map(t => t.coingeckoId).filter(Boolean)])];
   try {
-    const r = await fetch("https://api.coingecko.com/api/v3/simple/price?ids=convex-finance&vs_currencies=usd&include_24hr_change=true");
+    const r = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids.join(",")}&vs_currencies=usd&include_24hr_change=true`);
     const j = await r.json();
-    return { usd: j["convex-finance"].usd, change: j["convex-finance"].usd_24h_change };
+    return j || {};
   } catch {
-    return { usd: null, change: null };
+    return {};
   }
 }
 
@@ -291,12 +331,43 @@ function renderRevenue(items) {
   ul.innerHTML = "";
   for (const r of items.slice(0, 15)) {
     const li = document.createElement("li");
-    const kind = r.label.kind ? ` · <span class="muted small">${r.label.kind}</span>` : "";
+    const hint = r.looksVoting ? ` · <span class="tag tag-vote">voting-ish</span>` : "";
+    const kind = r.label.kind && r.label.kind !== "unknown" ? ` · <span class="muted small">${r.label.kind}</span>` : "";
     li.innerHTML = `
       <span class="dir in">IN</span>
       <span class="sym">${shortTok(r.amount)} ${r.symbol}</span>
       <span class="spacer"></span>
-      <span class="tstamp">${r.date} · ${r.label.name}${kind}</span>
+      <span class="tstamp">${r.date} · ${r.label.name}${kind}${hint}</span>
+      <a href="https://etherscan.io/tx/${r.hash}" target="_blank" rel="noopener">↗</a>`;
+    ul.appendChild(li);
+  }
+}
+
+function renderRevShare(items, bySymbol) {
+  const ul = $("revshare");
+  const totalEl = $("revshareTotal");
+  if (!items || items.length === 0) {
+    if (ul) ul.innerHTML = `<li class="muted">No rev-share inflows detected yet.</li>`;
+    if (totalEl) totalEl.textContent = "—";
+    return;
+  }
+  // Headline: biggest symbol by volume
+  if (totalEl && bySymbol) {
+    const pairs = Object.entries(bySymbol).sort((a, b) => b[1] - a[1]);
+    if (pairs.length) {
+      const [sym, amt] = pairs[0];
+      totalEl.textContent = `${shortTok(amt)} ${sym}`;
+    }
+  }
+  if (!ul) return;
+  ul.innerHTML = "";
+  for (const r of items.slice(0, 10)) {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <span class="dir rev">REV</span>
+      <span class="sym">${shortTok(r.amount)} ${r.symbol}</span>
+      <span class="spacer"></span>
+      <span class="tstamp">${r.date} · ${r.label.name}</span>
       <a href="https://etherscan.io/tx/${r.hash}" target="_blank" rel="noopener">↗</a>`;
     ul.appendChild(li);
   }
@@ -335,6 +406,69 @@ function renderOutflows(items) {
   }
 }
 
+// ---- voting power ----
+// Renders every configured voting position — held entries first with live
+// balance + USD value, then dormant entries in a muted "watching" state so
+// the panel advertises what we're tracking even when the treasury hasn't
+// taken the position yet. Dormant cards annotate with historical activity
+// ("held Oct 2025 → Jan 2026 · peak 6,080") when available.
+function renderVotingPower(items, history = {}) {
+  const ul = $("votingPower");
+  if (!ul) return;
+  if (!items || items.length === 0) {
+    ul.innerHTML = `<li class="muted">No voting tokens configured.</li>`;
+    return;
+  }
+  const held    = items.filter(x => x.balance != null && x.balance > 0.0001);
+  const dormant = items.filter(x => !(x.balance != null && x.balance > 0.0001));
+  const sorted = [...held.sort((a, b) => (b.usd || 0) - (a.usd || 0)), ...dormant];
+
+  ul.innerHTML = "";
+  for (const p of sorted) {
+    const isHeld = p.balance != null && p.balance > 0.0001;
+    const h = history[(p.address || "").toLowerCase()];
+    const li = document.createElement("li");
+    li.className = "vp-item" + (isHeld ? "" : " vp-dormant");
+    const usd = isHeld && p.usd != null ? `<span class="vp-usd">${short(p.usd)}</span>` : "";
+    const spaceBadge = p.space
+      ? `<a class="vp-space" href="https://snapshot.org/#/${p.space}" target="_blank" rel="noopener">${p.space}</a>`
+      : "";
+    let statusBadge;
+    if (isHeld) {
+      statusBadge = `<span class="vp-status held">held</span>`;
+    } else if (h) {
+      statusBadge = `<span class="vp-status unwound">unwound</span>`;
+    } else {
+      statusBadge = `<span class="vp-status watching">watching</span>`;
+    }
+    const amtText = isHeld ? fmt(p.balance, 2) : "—";
+    const historyLine = !isHeld && h
+      ? `<div class="vp-history">held ${fmtMonth(h.firstHeld)} → ${fmtMonth(h.lastHeld)} · peak ${shortTok(h.peak)}</div>`
+      : "";
+    li.innerHTML = `
+      <div class="vp-head">
+        <span class="vp-sym">${p.symbol}</span>
+        <span class="vp-eco">${p.ecosystem}</span>
+      </div>
+      <div class="vp-bal">
+        <span class="vp-amt">${amtText}</span>
+        ${usd}
+      </div>
+      ${historyLine}
+      <div class="vp-meta">${spaceBadge}${statusBadge}</div>
+    `;
+    ul.appendChild(li);
+  }
+}
+
+// "2025-10-13" → "Oct 2025"
+function fmtMonth(dateStr) {
+  if (!dateStr) return "—";
+  const [y, m] = dateStr.split("-");
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  return `${months[parseInt(m, 10) - 1]} ${y}`;
+}
+
 async function loadTreasury() {
   try {
     const r = await fetch("/api/treasury");
@@ -355,7 +489,7 @@ async function loadTreasury() {
 
 function setKeyMissingState() {
   const msg = `<li class="muted">Add <code>ETHERSCAN_API_KEY</code> to <code>.dev.vars</code> and restart <code>npm run dev</code> to populate this panel with live on-chain data.</li>`;
-  for (const id of ["allocations", "revenue", "txs"]) {
+  for (const id of ["allocations", "revenue", "revshare", "txs"]) {
     const el = $(id);
     if (el) el.innerHTML = msg;
   }
@@ -373,20 +507,67 @@ async function loadVotes() {
     const j = await r.json();
     const items = (j.votes || []).slice(0, 10);
     ul.innerHTML = "";
-    if (items.length === 0) { ul.innerHTML = `<li class="muted">No Snapshot votes found for this wallet on <span class="mono">cvx.eth</span>.</li>`; return; }
+    if (items.length === 0) {
+      ul.innerHTML = `<li class="muted">No direct Snapshot votes found for this wallet yet. Convex voting flows via Votium (see Allocations).</li>`;
+      return;
+    }
     for (const v of items) {
       const li = document.createElement("li");
+      li.className = "vote-item";
+      const top = (v.allocations || []).slice(0, 4);
+      const rest = Math.max(0, (v.gaugeCount || 0) - top.length);
+      const gaugesHtml = top.length
+        ? `<ul class="gauges">${top.map(a => `
+            <li>
+              <span class="g-bar" style="--pct:${a.pct.toFixed(2)}%"></span>
+              <span class="g-name">${escapeHtml(a.gauge)}</span>
+              <span class="g-pct mono">${a.pct.toFixed(1)}%</span>
+            </li>`).join("")}
+           </ul>`
+        : `<span class="muted small">Choice data unavailable for this proposal.</span>`;
+      const moreTxt = rest > 0 ? `<span class="muted small"> · +${rest} more</span>` : "";
+      const titleShort = (v.title || "").replace(/^\[[^\]]+\]\s*/, "").slice(0, 70);
       li.innerHTML = `
-        <span class="dir in">R${v.round}</span>
-        <span class="sym">${v.choice}</span>
-        <span class="spacer"></span>
-        <span class="tstamp">${v.date}</span>
-        ${v.proposalId ? `<a href="https://snapshot.org/#/cvx.eth/proposal/${v.proposalId}" target="_blank" rel="noopener">↗</a>` : ""}`;
+        <div class="vote-head">
+          <span class="dir in">${v.space.split(".")[0]}</span>
+          <span class="vote-title">${escapeHtml(titleShort)}</span>
+          <span class="spacer"></span>
+          <span class="tstamp">${v.date}${moreTxt}</span>
+          ${v.proposalId ? `<a href="https://snapshot.org/#/${v.space}/proposal/${v.proposalId}" target="_blank" rel="noopener">↗</a>` : ""}
+        </div>
+        ${gaugesHtml}`;
       ul.appendChild(li);
     }
   } catch {
-    ul.innerHTML = `<li class="muted">Snapshot indexer unreachable. Votes will appear once cvx.eth responds.</li>`;
+    ul.innerHTML = `<li class="muted">Snapshot indexer unreachable. Votes will appear once it responds.</li>`;
   }
+}
+
+function escapeHtml(s) {
+  return String(s || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+async function loadVotingPower(prices, history = {}) {
+  const results = await Promise.all(
+    VOTING_TOKENS.map(async (t) => {
+      try {
+        const raw = await erc20Balance(t.address, TREASURY);
+        const balance = Number(raw) / 1e18;
+        const usdPrice = prices?.[t.coingeckoId]?.usd;
+        const usd = usdPrice != null ? balance * usdPrice : null;
+        return { ...t, balance, usd };
+      } catch (e) {
+        console.warn("voting balance failed for", t.symbol, e);
+        return { ...t, balance: null, usd: null };
+      }
+    })
+  );
+  renderVotingPower(results, history);
+  return results;
 }
 
 // ---- range tabs ----
@@ -419,38 +600,47 @@ async function main() {
   wireThemeToggle();
 
   // Kick off on-chain reads and the aggregator in parallel.
-  const [vlcvxRaw, cvxRaw, price, treasury] = await Promise.all([
-    erc20Balance(CVX_LOCKER_V2, TREASURY).catch(() => null),
+  const [cvxRaw, prices, treasury] = await Promise.all([
     erc20Balance(CVX_TOKEN, TREASURY).catch(() => null),
-    getCvxPrice(),
+    getPrices(),
     loadTreasury(),
   ]);
 
-  const vlcvx = vlcvxRaw == null ? null : Number(vlcvxRaw) / 1e18;
-  const cvx   = cvxRaw   == null ? null : Number(cvxRaw) / 1e18;
+  // Voting power loads its own balances (includes vlCVX) and uses treasury
+  // history (from /api/treasury) to annotate dormant cards.
+  const vp = await loadVotingPower(prices, treasury?.votingTokenHistory || {});
+  const vlcvxEntry = vp.find(p => p.symbol === "vlCVX");
+  const vlcvx = vlcvxEntry?.balance ?? null;
+  const cvx   = cvxRaw == null ? null : Number(cvxRaw) / 1e18;
+
+  const cvxPrice = prices["convex-finance"]?.usd ?? null;
+  const cvxChange = prices["convex-finance"]?.usd_24h_change ?? null;
 
   if (vlcvx != null) animateTo($("vlcvx"), vlcvx, { decimals: 2 });
 
-  if (price.usd != null) animateTo($("cvxPrice"), price.usd, { decimals: 2, prefix: "$" });
-  if (price.change != null) {
-    const good = price.change >= 0;
+  if (cvxPrice != null) animateTo($("cvxPrice"), cvxPrice, { decimals: 2, prefix: "$" });
+  if (cvxChange != null) {
+    const good = cvxChange >= 0;
     const chip = $("cvxChange");
-    chip.textContent = (good ? "▲ " : "▼ ") + Math.abs(price.change).toFixed(2) + "% · 24h";
+    chip.textContent = (good ? "▲ " : "▼ ") + Math.abs(cvxChange).toFixed(2) + "% · 24h";
     chip.classList.toggle("good", good);
     chip.classList.toggle("bad", !good);
   }
 
-  if (vlcvx != null && price.usd != null) $("vlcvxUsd").textContent = short(vlcvx * price.usd);
-  if (vlcvx != null && cvx != null && price.usd != null) {
-    animateTo($("tvl"), (vlcvx + cvx) * price.usd, { decimals: 0, prefix: "$" });
-  }
+  if (vlcvx != null && cvxPrice != null) $("vlcvxUsd").textContent = short(vlcvx * cvxPrice);
+
+  // Treasury Value = sum of all tracked voting positions (USD) + unlocked CVX.
+  const votingUsd = vp.reduce((s, p) => s + (p.usd || 0), 0);
+  const cvxUsd = cvx != null && cvxPrice != null ? cvx * cvxPrice : 0;
+  const total = votingUsd + cvxUsd;
+  if (total > 0) animateTo($("tvl"), total, { decimals: 0, prefix: "$" });
 
   // Navy announcement bar
   if (vlcvx != null) {
     $("announceVlcvx").textContent = `Live vlCVX War Chest: ${fmt(vlcvx, 2)}`;
   }
-  if (vlcvx != null && cvx != null && price.usd != null) {
-    $("announceTvl").textContent = short((vlcvx + cvx) * price.usd);
+  if (total > 0) {
+    $("announceTvl").textContent = short(total);
   }
 
   if (treasury) {
@@ -459,6 +649,7 @@ async function main() {
     drawChart($("polChart"), filterSeries(currentLocks, currentRange));
     renderAllocations(treasury.bribesPaid);
     renderRevenue(treasury.revenue);
+    renderRevShare(treasury.revShare, treasury.summary?.revShareBySymbol);
     renderOutflows(treasury.outflows);
     renderLastPurchase(currentLocks);
   }

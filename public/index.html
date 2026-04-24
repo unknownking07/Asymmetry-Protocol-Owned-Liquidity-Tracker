@@ -135,50 +135,73 @@
     <ul class="buylist" id="buylist"></ul>
   </section>
 
+  <!-- VOTING POWER -->
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>Voting Power</h2>
+        <p class="muted small">Governance positions held by the treasury — live on-chain balances</p>
+      </div>
+    </div>
+    <ul class="vp-grid" id="votingPower"><li class="muted">Loading…</li></ul>
+  </section>
+
   <!-- VOTES + ALLOCATIONS -->
   <section class="grid two gap">
     <div class="panel">
       <div class="panel-head">
         <div>
-          <h2>Convex Votes</h2>
-          <p class="muted small">Latest gauge votes cast by the treasury on Snapshot (<span class="mono">cvx.eth</span>)</p>
+          <h2>Snapshot Votes</h2>
+          <p class="muted small">Direct gauge votes cast by the treasury — showing top gauges and weight</p>
         </div>
       </div>
-      <ul class="list" id="votes"><li class="muted">Loading…</li></ul>
+      <ul class="list votes-list" id="votes"><li class="muted">Loading…</li></ul>
     </div>
 
     <div class="panel">
       <div class="panel-head">
         <div>
           <h2>Allocations — Bribes Paid</h2>
-          <p class="muted small">Tokens deposited to Votium Platform to direct votes toward Asymmetry pools</p>
+          <p class="muted small">Tokens deposited to Votium Platform to direct vlCVX votes toward Asymmetry pools</p>
         </div>
       </div>
       <ul class="list" id="allocations"><li class="muted">Loading…</li></ul>
     </div>
   </section>
 
-  <!-- REV STREAMS + TXS -->
+  <!-- REV SHARE + REV STREAMS -->
   <section class="grid two gap">
     <div class="panel">
       <div class="panel-head">
         <div>
-          <h2>Revenue Streams</h2>
-          <p class="muted small">Token inflows into the treasury, categorized by source</p>
+          <h2>POL Rev Share</h2>
+          <p class="muted small">Protocol revenue forwarded to the treasury (USDaf InterestRouter &amp; friends)</p>
         </div>
+        <span class="stat-badge" id="revshareTotal">—</span>
       </div>
-      <ul class="list" id="revenue"><li class="muted">Loading…</li></ul>
+      <ul class="list" id="revshare"><li class="muted">Loading…</li></ul>
     </div>
 
     <div class="panel">
       <div class="panel-head">
         <div>
-          <h2>Recent Activity</h2>
-          <p class="muted small">Token transfers in / out of the treasury wallet</p>
+          <h2>Revenue Streams</h2>
+          <p class="muted small">All other inbound token transfers, categorized by source</p>
         </div>
       </div>
-      <ul class="list" id="txs"><li class="muted">Loading…</li></ul>
+      <ul class="list" id="revenue"><li class="muted">Loading…</li></ul>
     </div>
+  </section>
+
+  <!-- RECENT ACTIVITY -->
+  <section class="panel">
+    <div class="panel-head">
+      <div>
+        <h2>Recent Activity</h2>
+        <p class="muted small">Outbound token transfers from the treasury wallet</p>
+      </div>
+    </div>
+    <ul class="list" id="txs"><li class="muted">Loading…</li></ul>
   </section>
 
   <!-- NOTES -->
