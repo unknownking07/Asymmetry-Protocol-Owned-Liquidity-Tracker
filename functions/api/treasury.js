@@ -12,7 +12,7 @@ import { tokenTx, toDecimal } from "../_lib/etherscan.js";
 import {
   TREASURY, CVX_TOKEN, CVX_LOCKER_V2,
   VOTIUM_MULTIMERKLE_V1, VOTIUM_MULTIMERKLE_V2, VOTIUM_VLCVX_DISTRIBUTOR,
-  VOTIUM_PLATFORM, USDAF_INTEREST_ROUTER,
+  VOTIUM_PLATFORM, USDAF_INTEREST_ROUTER, OPASF_TOKEN, OPASF_REDEMPTION_SAFE,
   VOTING_TOKENS,
   labelFor, looksLikeVotingToken,
 } from "../_lib/labels.js";
@@ -24,6 +24,16 @@ const VOTIUM_CLAIM_SET = new Set([
 ]);
 const VOTIUM_DEPOSIT_SET = new Set([VOTIUM_PLATFORM.toLowerCase()]);
 const REVSHARE_SET = new Set([USDAF_INTEREST_ROUTER.toLowerCase()]);
+// opASF exercise sources — addresses that send USDaf to the treasury when
+// investors redeem opASF for ASF. The Redemption Safe is the active collector
+// (verified: 50+ distinct inbound USDaf senders that forward consolidated
+// chunks to the treasury on the same dates as POL purchases). The opASF token
+// itself is included as a safety net — its current implementation doesn't
+// transfer USDaf directly, but a future redeemer module might use it.
+const OPASF_SOURCE_SET = new Set([
+  OPASF_TOKEN.toLowerCase(),
+  OPASF_REDEMPTION_SAFE.toLowerCase(),
+]);
 const VOTING_TOKEN_SET = new Set(VOTING_TOKENS.map(t => t.address.toLowerCase()));
 
 export async function onRequestGet({ env, request }) {
@@ -31,7 +41,7 @@ export async function onRequestGet({ env, request }) {
     return json({ error: "missing ETHERSCAN_API_KEY" }, 501);
   }
 
-  const cacheKey = new Request("https://cache/asym-treasury-v4", { method: "GET" });
+  const cacheKey = new Request("https://cache/asym-treasury-v6", { method: "GET" });
   const cache = caches.default;
   const cached = await cache.match(cacheKey);
   if (cached) return cached;
@@ -43,12 +53,13 @@ export async function onRequestGet({ env, request }) {
     return json({ error: String(e) }, 502);
   }
 
-  const locks      = [];
-  const claims     = [];
-  const bribesPaid = [];
-  const revShare   = [];
-  const revenue    = [];
-  const outflows   = [];
+  const locks         = [];
+  const claims        = [];
+  const bribesPaid    = [];
+  const revShare      = [];
+  const opasfInvests  = [];
+  const revenue       = [];
+  const outflows      = [];
 
   // Per voting-token activity — used to show "held Oct 2025 → Jan 2026" on
   // dormant cards. Collect every transfer touching the token contract, then
@@ -107,6 +118,12 @@ export async function onRequestGet({ env, request }) {
       continue;
     }
 
+    // opASF exercise proceeds — USDaf investors paid in to redeem opASF for ASF.
+    if (!isOut && OPASF_SOURCE_SET.has(from)) {
+      opasfInvests.push(row);
+      continue;
+    }
+
     if (isOut) outflows.push(row);
     else       revenue.push(row);
   }
@@ -123,6 +140,12 @@ export async function onRequestGet({ env, request }) {
   const revShareBySymbol = {};
   for (const r of revShare) {
     revShareBySymbol[r.symbol] = (revShareBySymbol[r.symbol] || 0) + r.amount;
+  }
+
+  // opASF investment totals by symbol — should be USDaf, but keep shape generic.
+  const opasfInvestsBySymbol = {};
+  for (const r of opasfInvests) {
+    opasfInvestsBySymbol[r.symbol] = (opasfInvestsBySymbol[r.symbol] || 0) + r.amount;
   }
 
   // Fold each voting-token's transfer list into { firstHeld, lastHeld, peak }
@@ -163,6 +186,7 @@ export async function onRequestGet({ env, request }) {
     claims,
     bribesPaid,
     revShare,
+    opasfInvests,
     revenue,
     outflows,
     votingTokenHistory,
@@ -173,6 +197,8 @@ export async function onRequestGet({ env, request }) {
       bribesPaidCount: bribesPaid.length,
       revShareCount: revShare.length,
       revShareBySymbol,
+      opasfInvestCount: opasfInvests.length,
+      opasfInvestsBySymbol,
       inflowCount: revenue.length,
       outflowCount: outflows.length,
     },

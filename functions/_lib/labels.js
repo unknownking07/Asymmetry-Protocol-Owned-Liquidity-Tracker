@@ -28,6 +28,8 @@ export const VOTIUM_PLATFORM          = "0x63942e31e98f1833a234077f47880a66136a2
 export const USDAF_TOKEN            = "0x9cf12ccd6020b6888e4d4c4e4c7aca33c1eb91f8"; // USDaf stablecoin (BoldToken fork)
 export const USDAF_TOKEN_LEGACY     = "0x85e30b8b263bc64d94b827ed450f2edfee8579da"; // older USDaf deploy — rarely seen
 export const USDAF_INTEREST_ROUTER  = "0x1771f4de6836b10b59dd66990b0190985df6673c"; // Liquity-v2 InterestRouter — forwards USDaf borrower interest to the treasury (POL rev share)
+export const OPASF_TOKEN            = "0x7fe24f1a024d33506966cb7ca48bab8c65fb632d"; // opASF — call option on ASF; investors pay USDaf to redeem at a discount, proceeds flow to the war chest
+export const OPASF_REDEMPTION_SAFE  = "0x0ef268a2421f490a2d14a955d9d7325054f2918e"; // Safe that collects USDaf from opASF exercises and forwards to the treasury / Asymmetry Ops (verified: 50+ distinct USDaf inbound senders, consolidated outflows match POL purchase dates)
 export const ASYM_OPS               = "0x4bab8b679e242136a01387042c3918ea399fdb12";
 export const COW_SWAP               = "0x9008d19f58aabd9ed0d60971565aa8510560ab41";
 
@@ -122,6 +124,8 @@ export const LABELS = {
 
   // --- Asymmetry / counterparties ---
   [USDAF_INTEREST_ROUTER]: { name: "USDaf InterestRouter · rev share", kind: "revshare" },
+  [OPASF_TOKEN]:           { name: "opASF (call option)",              kind: "opasf" },
+  [OPASF_REDEMPTION_SAFE]: { name: "opASF Redemption Safe",            kind: "opasf" },
   [ASYM_OPS]:              { name: "Asymmetry Ops",                   kind: "asymmetry" },
   [COW_SWAP]:              { name: "CoW Swap (settle)",               kind: "dex" },
 };

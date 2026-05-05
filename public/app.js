@@ -373,6 +373,35 @@ function renderRevShare(items, bySymbol) {
   }
 }
 
+function renderOpasfInvests(items, bySymbol) {
+  const ul = $("opasfInvests");
+  const totalEl = $("opasfTotal");
+  if (!items || items.length === 0) {
+    if (ul) ul.innerHTML = `<li class="muted">No opASF exercises detected yet.</li>`;
+    if (totalEl) totalEl.textContent = "—";
+    return;
+  }
+  if (totalEl && bySymbol) {
+    const pairs = Object.entries(bySymbol).sort((a, b) => b[1] - a[1]);
+    if (pairs.length) {
+      const [sym, amt] = pairs[0];
+      totalEl.textContent = `${shortTok(amt)} ${sym}`;
+    }
+  }
+  if (!ul) return;
+  ul.innerHTML = "";
+  for (const r of items.slice(0, 10)) {
+    const li = document.createElement("li");
+    li.innerHTML = `
+      <span class="dir rev">INVEST</span>
+      <span class="sym">${shortTok(r.amount)} ${r.symbol}</span>
+      <span class="spacer"></span>
+      <span class="tstamp">${r.date} · ${r.label.name}</span>
+      <a href="https://etherscan.io/tx/${r.hash}" target="_blank" rel="noopener">↗</a>`;
+    ul.appendChild(li);
+  }
+}
+
 function renderLastPurchase(locks) {
   if (!locks || locks.length === 0) {
     $("lastBuyAgo").textContent = "—";
@@ -712,6 +741,7 @@ async function main() {
     renderAllocations(treasury.bribesPaid);
     renderRevenue(treasury.revenue);
     renderRevShare(treasury.revShare, treasury.summary?.revShareBySymbol);
+    renderOpasfInvests(treasury.opasfInvests, treasury.summary?.opasfInvestsBySymbol);
     renderOutflows(treasury.outflows);
     renderLastPurchase(currentLocks);
   }
