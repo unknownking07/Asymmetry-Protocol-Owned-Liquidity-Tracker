@@ -14,6 +14,7 @@ const VOTING_TOKENS = [
     ecosystem: "Convex",
     space: "cvx.eth",
     coingeckoId: "convex-finance",
+    useLockedBalance: true, // use lockedBalanceOf() for total locked, not balanceOf() (epoch voting power)
   },
   {
     symbol: "sdPENDLE-gauge",
@@ -118,8 +119,10 @@ async function rpc(method, params) {
   throw lastErr || new Error("all RPCs failed");
 }
 const encBalanceOf = (addr) => "0x70a08231" + "0".repeat(24) + addr.toLowerCase().replace(/^0x/, "");
-async function erc20Balance(token, holder) {
-  const data = await rpc("eth_call", [{ to: token, data: encBalanceOf(holder) }, "latest"]);
+const encLockedBalanceOf = (addr) => "0x59355736" + "0".repeat(24) + addr.toLowerCase().replace(/^0x/, "");
+async function erc20Balance(token, holder, { locked = false } = {}) {
+  const calldata = locked ? encLockedBalanceOf(holder) : encBalanceOf(holder);
+  const data = await rpc("eth_call", [{ to: token, data: calldata }, "latest"]);
   if (!data || data === "0x") return 0n;
   return BigInt(data);
 }
@@ -666,7 +669,7 @@ async function loadVotingPower(prices, history = {}) {
   const results = await Promise.all(
     VOTING_TOKENS.map(async (t) => {
       try {
-        const raw = await erc20Balance(t.address, TREASURY);
+        const raw = await erc20Balance(t.address, TREASURY, { locked: !!t.useLockedBalance });
         const balance = Number(raw) / 1e18;
         const usdPrice = prices?.[t.coingeckoId]?.usd;
         const usd = usdPrice != null ? balance * usdPrice : null;
