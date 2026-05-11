@@ -160,6 +160,9 @@ function animateTo(el, target, opts = {}) {
 // ---- chart ----
 let currentRange = "all";
 let currentLocks = [];
+let chartMode = "vlcvx"; // "vlcvx" or "usd"
+let storedCvxPrice = null;
+let chartPoints = []; // [{x, y, date, cumulative, usdValue}] for hover hit-testing
 function filterSeries(buys, range) {
   const sorted = [...buys].sort((a, b) => a.date.localeCompare(b.date));
   if (range === "all") return sorted;
@@ -169,7 +172,7 @@ function filterSeries(buys, range) {
   return sorted.filter(b => b.date >= cs);
 }
 
-function drawChart(canvas, series) {
+function drawChart(canvas, series, mode = "vlcvx") {
   const ctx = canvas.getContext("2d");
   const dpr = window.devicePixelRatio || 1;
   const rect = canvas.getBoundingClientRect();
@@ -184,7 +187,8 @@ function drawChart(canvas, series) {
 
   const pad = { l: 62, r: 24, t: 24, b: 38 };
   const xs = series.map(p => new Date(p.date).getTime());
-  const ys = series.map(p => p.cumulative);
+  const isUsd = mode === "usd" && storedCvxPrice != null;
+  const ys = series.map(p => isUsd ? p.cumulative * storedCvxPrice : p.cumulative);
   const xMin = Math.min(...xs), xMax = Math.max(...xs);
   const yMin = 0, yMax = Math.max(...ys) * 1.12;
 
@@ -204,7 +208,14 @@ function drawChart(canvas, series) {
     ctx.lineTo(w - pad.r, gy);
     ctx.stroke();
     const v = yMax - (yMax - yMin) * (i / 4);
-    const label = v >= 1000 ? (v/1000).toFixed(1) + "k" : Math.round(v).toLocaleString();
+    let label;
+    if (isUsd) {
+      if (v >= 1_000_000) label = "$" + (v/1_000_000).toFixed(1) + "M";
+      else if (v >= 1_000) label = "$" + (v/1_000).toFixed(0) + "K";
+      else label = "$" + Math.round(v);
+    } else {
+      label = v >= 1000 ? (v/1000).toFixed(1) + "k" : Math.round(v).toLocaleString();
+    }
     ctx.fillText(label, 10, gy);
   }
 
@@ -275,6 +286,15 @@ function drawChart(canvas, series) {
     const tx = X(xs[i]);
     ctx.fillText(label, Math.max(pad.l, Math.min(w - pad.r - 50, tx - 20)), h - 14);
   }
+
+  // Store point positions for hover tooltips
+  chartPoints = series.map((p, i) => ({
+    x: X(xs[i]),
+    y: Y(ys[i]),
+    date: p.date,
+    cumulative: p.cumulative,
+    usdValue: storedCvxPrice != null ? p.cumulative * storedCvxPrice : null,
+  }));
 }
 function drawEmpty(ctx, w, h) {
   ctx.fillStyle = cssVar("--chart-label") || "#6A7289";
@@ -525,7 +545,7 @@ function setKeyMissingState() {
   // Use fallback buys for the chart
   currentLocks = FALLBACK_BUYS;
   renderBuyList(FALLBACK_BUYS);
-  drawChart($("polChart"), filterSeries(FALLBACK_BUYS, currentRange));
+  drawChart($("polChart"), filterSeries(FALLBACK_BUYS, currentRange), chartMode);
 }
 
 // Friendly labels per Snapshot space for the tab bar — keeps tabs short and
@@ -663,12 +683,29 @@ async function loadVotingPower(prices, history = {}) {
 
 // ---- range tabs ----
 function wireRangeTabs() {
-  for (const btn of $$(".seg")) {
+  for (const btn of $$(".seg[data-range]")) {
     btn.addEventListener("click", () => {
-      $$(".seg").forEach(b => b.classList.remove("on"));
+      $$(".seg[data-range]").forEach(b => b.classList.remove("on"));
       btn.classList.add("on");
       currentRange = btn.dataset.range;
-      drawChart($("polChart"), filterSeries(currentLocks, currentRange));
+      drawChart($("polChart"), filterSeries(currentLocks, currentRange), chartMode);
+    });
+  }
+}
+
+function wireModeTabs() {
+  for (const btn of $$(".chart-mode .seg")) {
+    btn.addEventListener("click", () => {
+      $$(".chart-mode .seg").forEach(b => b.classList.remove("on"));
+      btn.classList.add("on");
+      chartMode = btn.dataset.mode;
+      const sub = $("chartSubtitle");
+      if (sub) {
+        sub.textContent = chartMode === "usd"
+          ? "War chest value in USD — vlCVX × current CVX price"
+          : "Cumulative vlCVX accrual from announced purchases";
+      }
+      drawChart($("polChart"), filterSeries(currentLocks, currentRange), chartMode);
     });
   }
 }
@@ -681,14 +718,56 @@ function wireThemeToggle() {
     const now = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
     applyTheme(now);
     // redraw chart in new colors
-    drawChart($("polChart"), filterSeries(currentLocks, currentRange));
+    drawChart($("polChart"), filterSeries(currentLocks, currentRange), chartMode);
+  });
+}
+
+function wireChartHover() {
+  const canvas = $("polChart");
+  const tooltip = $("chartTooltip");
+  if (!canvas || !tooltip) return;
+
+  canvas.addEventListener("mousemove", (e) => {
+    if (chartPoints.length === 0) { tooltip.classList.remove("show"); return; }
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+
+    // Find nearest point within 30px
+    let best = null, bestDist = 30;
+    for (const pt of chartPoints) {
+      const d = Math.hypot(pt.x - mx, pt.y - my);
+      if (d < bestDist) { bestDist = d; best = pt; }
+    }
+
+    if (!best) { tooltip.classList.remove("show"); return; }
+
+    const vlcvxLine = `<div class="tt-val">${fmt(best.cumulative, 2)} vlCVX</div>`;
+    const usdLine = best.usdValue != null
+      ? `<div class="tt-sub">≈ ${fmtUsd(best.usdValue)}</div>`
+      : "";
+    tooltip.innerHTML = `<div class="tt-date">${best.date}</div>${vlcvxLine}${usdLine}`;
+
+    // Position tooltip relative to chartwrap
+    const wrapRect = canvas.parentElement.getBoundingClientRect();
+    let tx = best.x + (rect.left - wrapRect.left);
+    let ty = best.y + (rect.top - wrapRect.top);
+    tooltip.style.left = tx + "px";
+    tooltip.style.top = ty + "px";
+    tooltip.classList.add("show");
+  });
+
+  canvas.addEventListener("mouseleave", () => {
+    tooltip.classList.remove("show");
   });
 }
 
 // ---- main ----
 async function main() {
   wireRangeTabs();
+  wireModeTabs();
   wireThemeToggle();
+  wireChartHover();
 
   // Kick off on-chain reads and the aggregator in parallel.
   const [cvxRaw, prices, treasury] = await Promise.all([
@@ -706,6 +785,7 @@ async function main() {
 
   const cvxPrice = prices["convex-finance"]?.usd ?? null;
   const cvxChange = prices["convex-finance"]?.usd_24h_change ?? null;
+  storedCvxPrice = cvxPrice;
 
   if (vlcvx != null) animateTo($("vlcvx"), vlcvx, { decimals: 2 });
 
@@ -737,7 +817,7 @@ async function main() {
   if (treasury) {
     currentLocks = treasury.locks || [];
     renderBuyList(currentLocks);
-    drawChart($("polChart"), filterSeries(currentLocks, currentRange));
+    drawChart($("polChart"), filterSeries(currentLocks, currentRange), chartMode);
     renderAllocations(treasury.bribesPaid);
     renderRevenue(treasury.revenue);
     renderRevShare(treasury.revShare, treasury.summary?.revShareBySymbol);
@@ -752,4 +832,4 @@ async function main() {
 }
 
 window.addEventListener("DOMContentLoaded", main);
-window.addEventListener("resize", () => drawChart($("polChart"), filterSeries(currentLocks, currentRange)));
+window.addEventListener("resize", () => drawChart($("polChart"), filterSeries(currentLocks, currentRange), chartMode));

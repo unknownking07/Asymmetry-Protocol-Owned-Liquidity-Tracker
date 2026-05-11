@@ -116,16 +116,23 @@
     <div class="panel-head">
       <div>
         <h2>War Chest Growth</h2>
-        <p class="muted small">Cumulative vlCVX accrual from announced purchases</p>
+        <p class="muted small" id="chartSubtitle">Cumulative vlCVX accrual from announced purchases</p>
       </div>
-      <div class="segmented" role="tablist">
-        <button class="seg on" data-range="all" role="tab">ALL</button>
-        <button class="seg" data-range="6m" role="tab">6M</button>
-        <button class="seg" data-range="3m" role="tab">3M</button>
+      <div class="chart-controls">
+        <div class="segmented chart-mode" role="tablist">
+          <button class="seg on" data-mode="vlcvx" role="tab">vlCVX</button>
+          <button class="seg" data-mode="usd" role="tab">USD ($)</button>
+        </div>
+        <div class="segmented" role="tablist">
+          <button class="seg on" data-range="all" role="tab">ALL</button>
+          <button class="seg" data-range="6m" role="tab">6M</button>
+          <button class="seg" data-range="3m" role="tab">3M</button>
+        </div>
       </div>
     </div>
     <div class="chartwrap">
       <canvas id="polChart"></canvas>
+      <div class="chart-tooltip" id="chartTooltip"></div>
     </div>
 
     <div class="buy-head">
